@@ -1,0 +1,65 @@
+import numpy as np
+import pandas as pd
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, LSTM, Dense, Dropout, Input, Concatenate
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+# Sample dataset
+captions = {
+    'image1.jpg': 'A dog playing in the park.',
+    'image2.jpg': 'A cat sitting on a windowsill.',
+}
+
+# Prepare captions
+all_captions = list(captions.values())
+tokenizer = Tokenizer()
+tokenizer.fit_on_texts(all_captions)
+vocab_size = len(tokenizer.word_index) + 1  # +1 for padding
+max_length = max(len(caption.split()) for caption in all_captions)
+
+# Convert captions to sequences
+sequences = tokenizer.texts_to_sequences(all_captions)
+padded_sequences = pad_sequences(sequences, maxlen=max_length, padding='post')
+
+# Simulated image features (randomly generated)
+num_images = len(captions)
+image_features = np.random.rand(num_images, 2048)  # Assuming a feature vector of size 2048
+
+# Define a simple model
+def define_model(vocab_size, max_length):
+    inputs1 = Input(shape=(2048,))  # Image feature input
+    fe1 = Dense(256, activation='relu')(inputs1)
+    fe1 = Dropout(0.5)(fe1)
+
+    inputs2 = Input(shape=(max_length,))
+    se1 = Embedding(vocab_size, 100, mask_zero=True)(inputs2)
+    se1 = LSTM(256)(se1)
+
+    merge = Concatenate()([fe1, se1])
+    outputs = Dense(vocab_size, activation='softmax')(merge)
+
+    model = Sequential([inputs1, inputs2, merge, outputs])
+    model.compile(loss='categorical_crossentropy', optimizer='adam')
+    return model
+
+# Create the model
+model = define_model(vocab_size, max_length)
+
+# Example usage for generating a caption
+def generate_caption(model, features, tokenizer, max_length):
+    # Start with a dummy input (e.g., "startseq")
+    caption = [tokenizer.word_index.get('A')]  # Simulate starting word
+    for _ in range(max_length):
+        sequence = pad_sequences([caption], maxlen=max_length, padding='post')
+        yhat = model.predict(np.array(features).reshape(1, 2048), verbose=0)
+        yhat = np.argmax(yhat)
+        caption.append(yhat)
+        if yhat == 0:  # Assuming 0 is the index for "endseq"
+            break
+    return ' '.join(tokenizer.index_word[i] for i in caption if i > 0)
+
+# Simulate generating captions for each image
+for img, features in zip(captions.keys(), image_features):
+    caption = generate_caption(model, features, tokenizer, max_length)
+    print(f"Generated Caption for {img}: {caption}")
